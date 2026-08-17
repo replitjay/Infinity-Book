@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Infinity"
+description = "A mobile-first free-to-play cricket and social gaming platform for India, with live scores, games, predictions, leaderboards, virtual coins, and responsible-play controls."
+version = "1.0.0"
+id = "artifacts/infinity-web"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19180
+
+[services.development]
+run = "pnpm --filter @workspace/infinity-web run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/infinity-web", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/infinity-web/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19180"
+BASE_PATH = "/"

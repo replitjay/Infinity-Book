@@ -1,6 +1,6 @@
-# [Project name]
+# Infinity
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Infinity is a mobile-first free-to-play cricket and social gaming web app for India, with live score discovery, casual games, free prediction contests, virtual coins, leaderboards, and responsible-play controls.
 
 ## Run & Operate
 
@@ -22,23 +22,35 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/infinity-web/src/App.tsx` — web app routes, mock product data, and interactive UI
+- `artifacts/infinity-web/src/index.css` — Infinity visual system, responsive styles, motion, and accessibility states
+- `attached_assets/Infinity_Book_Website_Design_Specification_1786978376654.pdf` — original design and development specification
+- `attached_assets/Pasted-I-am-building-a-full-stack-web-application-called-Infin_1786978384159.txt` — initial technical brief and Phase 1 requirements
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first milestone is a frontend-only web experience with realistic mock data so the product surface can be reviewed before connecting live services.
+- The app uses route-aware shared navigation with mobile bottom tabs and a desktop sidebar.
+- Virtual coin language is intentionally separated from cash language; the first milestone includes no withdrawal or rupee-equivalent flows.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Homepage with live match discovery, free-play CTAs, quick links, and game previews
+- Live scores hub and match centre with commentary, scorecard, overs, and connection interruption state
+- Games lobby with category filters and playable mock game cards
+- Prediction contest hub with free join interactions
+- Daily leaderboard
+- Coins account with free earning routes, coin packs, and activity history
+- Responsible-play controls, breaks, and self-exclusion dialog
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Build the web app first; native mobile app work is not part of this milestone.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Keep the compliance statement “100% free to play. No deposits. No cash prizes.” visible on key conversion surfaces.
+- Gold is reserved for coins/rewards, green for primary actions/positive states, and red/coral for live or destructive states.
 
 ## Pointers
 
