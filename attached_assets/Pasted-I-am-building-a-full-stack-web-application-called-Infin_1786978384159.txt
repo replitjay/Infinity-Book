@@ -1,0 +1,273 @@
+I am building a full-stack web application called "Infinity" — a free-to-play 
+social cricket and casino gaming platform for the Indian market. 
+
+I have attached the full Design & Development Specification PDF. Work from 
+Sections 4–14 of that document. Below is the complete technical brief.
+
+---
+
+STACK
+- Frontend: Next.js 15 (App Router), TypeScript, Tailwind CSS
+- Backend: Next.js API routes + separate NestJS service for WebSocket/real-time
+- Database: PostgreSQL with Prisma ORM
+- Cache/Realtime: Redis (Upstash) + Socket.IO
+- Auth: Phone OTP via MSG91 + Google OAuth via NextAuth
+- Payments: Razorpay (virtual coin packs only)
+- CDN: Cloudflare
+- Analytics: GA4 + Mixpanel
+
+---
+
+PHASE 1 — BUILD THIS FIRST
+
+1. PROJECT SCAFFOLD
+   - Next.js 15 App Router, TypeScript strict mode
+   - Tailwind CSS configured with the exact design system below
+   - Prisma connected to PostgreSQL
+   - Folder structure: /app (pages), /components, /lib, /hooks, /types, /prisma
+
+2. DESIGN SYSTEM (implement as Tailwind config + CSS variables)
+
+   Colors:
+   --color-base: #0B1016
+   --color-surface: #141C26
+   --color-surface-raised: #1E2A38
+   --color-primary: #0FA968        /* green — CTAs and positive states only */
+   --color-accent: #E8B44A         /* gold — coins, rewards, Club tier only */
+   --color-live: #E5342F           /* red — live indicator and destructive only */
+   --color-text-primary: #F2F5F8
+   --color-text-muted: #8695A6
+
+   Typography:
+   - Display: Clash Display (from CDN) — hero headlines, section titles
+   - Interface: Inter (variable) — all body, nav, labels
+   - Numeric: Inter with font-variant-numeric: tabular-nums — ALL live scores, 
+     coin balances, timers, leaderboard ranks
+
+   Spacing scale (only these values): 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64px
+   Border radius: 8px cards, 12px panels, 999px pills/chips, 6px inputs
+   Elevation: surface color lightening only, no heavy shadows
+   Touch targets: minimum 44×44px everywhere, game tiles minimum 96×96px
+
+3. DATABASE SCHEMA (Prisma)
+   Build these models:
+   - User (id, phone, name, email, createdAt, otp, otpExpiry)
+   - CoinLedger (id, userId, type ENUM[GRANT/PURCHASE/SPEND/BONUS], 
+     amount, balance, idempotencyKey, createdAt) — append-only, never update rows
+   - GameSession (id, userId, gameSlug, coinsSpent, outcome, serverSeed, 
+     clientSeed, createdAt) — server-authoritative outcomes only
+   - Contest (id, matchSlug, questions JSON, closingTime, prizeType, 
+     prizeValue, status)
+   - ContestEntry (id, userId, contestId, answers JSON, score, rank, createdAt)
+   - MatchCache (id, matchId, payload JSON, lastUpdated) — Redis-backed, 
+     PostgreSQL for completed matches
+   - Subscription (id, userId, tier, startDate, endDate, razorpaySubId)
+
+4. PAGES TO BUILD (URL structure from the spec's sitemap)
+
+   PUBLIC (server-rendered, indexed):
+   - / — Homepage
+   - /cricket/live-scores — Live scores hub  
+   - /cricket/match/[slug] — Match centre
+   - /cricket/schedule — Schedule
+   - /cricket/results — Results
+   - /cricket/players/[slug] — Player profile (programmatic)
+   - /cricket/teams/[slug] — Team page
+   - /games — Games lobby (indexed)
+   - /games/[category]/[slug] — Game description page (indexed)
+   - /predict — Prediction contests hub
+   - /predict/contest/[id] — Individual contest
+   - /leaderboard/daily + /weekly + /season
+   - /blog/[slug]
+   - /club — Subscription landing
+   - /about, /contact, /terms, /privacy, /refund-policy, 
+     /responsible-play, /no-real-money-policy, /virtual-currency-policy
+
+   GATED (noindex, requires auth):
+   - /account/profile
+   - /account/coins — NO withdrawal, NO bank fields, NO rupee equivalent 
+     of coins ever shown
+   - /account/achievements
+   - /account/play-limits
+   - /account/settings
+
+5. HOMEPAGE SECTIONS (render in this exact order, mobile-first):
+
+   a) Sticky header: Logo | Cricket | Games | Predict | Leaderboard | 
+      [coin chip if logged in] | Login + Sign Up if logged out | Search icon
+
+   b) Live match strip: horizontally scrollable cards, each showing both teams, 
+      score, overs, match status. Pulsing red dot on LIVE matches. 
+      Tapping opens /cricket/match/[slug]
+
+   c) Hero: headline, "100% free to play. No deposits. No cash prizes." as 
+      subheading (this is a compliance statement, not marketing copy), 
+      primary CTA: "Play free — get 10,000 coins" in --color-primary green
+
+   d) Quick play tiles: 6 game tiles in 3×2 grid
+
+   e) Live prediction promo: active contest tied to current match, 
+      entrant count, countdown timer, CTA
+
+   f) Games by category: horizontal scroll rails for Cricket / Cards / Slots / Table
+
+   g) Leaderboard preview: top 5 + logged-in user's own rank
+
+   h) Latest cricket content: 4 article cards
+
+   i) Trust band: "Free-to-play" badge | "18+" badge | Responsible Play link | 
+      "Certified RNG" badge
+
+   j) SEO content block: 300 words descriptive copy about the platform
+
+   k) Footer: full sitemap links, all legal pages, responsible play, 
+      app store badges. ZERO betting links of any kind anywhere.
+
+   MOBILE: Sticky bottom nav with 5 tabs: Home | Cricket | Play | Predict | Me
+
+6. MATCH CENTRE (/cricket/match/[slug])
+
+   - Sticky score header: both teams, score, overs, CRR, RRR, match status, 
+     venue, toss result
+   - Tab bar: Live | Scorecard | Commentary | Squads | Stats | H2H
+   - Live tab: current batters (with strike indicator), current bowler, 
+     last 12 balls as visual over strip (tokens: dot/1-6/W/WD/NB/LB/B), 
+     partnership, fall of wickets
+   - Commentary: reverse-chronological, virtualised list, appends via WebSocket
+   - Contextual prediction CTA placed immediately below live panel — 
+     "Free contest live for this match" — this is the content-to-product 
+     conversion bridge
+   - Below fold: match preview/report, related matches, venue stats
+
+7. SCORE FEED ARCHITECTURE (critical — do not skip this)
+
+   - API key NEVER goes to the browser. Server-side only. 
+     Verified absent from client bundle.
+   - NestJS scheduled job polls provider every 5s during live matches, 
+     60s otherwise
+   - Normalise payload to internal schema, diff against last Redis state
+   - Redis stores current match state with TTL
+   - REST endpoint for SSR initial render (SEO-visible, fast first paint)
+   - Socket.IO rooms — one per match — push deltas only (not full scorecard)
+   - Browser updates score header, over strip, commentary in place
+   - Feed failure state: show last-known score with visible timestamp + 
+     "Reconnecting..." indicator. Never show blank or stale-as-live.
+   - On match completion: persist full scorecard to PostgreSQL — 
+     these become permanent indexed content pages
+
+   For now, mock the feed with realistic static data. 
+   The architecture above must be in place for the real feed to plug in.
+
+8. GAMES LOBBY (/games)
+
+   - Filter bar: All | Cricket | Cards | Slots | Table | Sort: Popular / New
+   - "Continue playing" rail for returning users (above the grid)
+   - Game card grid: thumbnail, title, category tag, player count, "Free" badge
+   - Game states: Default | Hover | Locked (insufficient coins) | 
+     New badge | Playing-now count
+   - "Out of coins?" panel at bottom: Watch video → Daily bonus → 
+     Coin packs. Free routes listed FIRST.
+   - Each game card links to an indexed /games/[category]/[slug] page 
+     with rules, strategy, screenshot — these rank for "how to play X" queries
+
+9. COIN SYSTEM
+   
+   Rules that cannot be broken:
+   - No withdrawal function anywhere in the codebase
+   - Coins never shown with a rupee equivalent
+   - Purchase flow is "buy a coin pack" not "top up a balance"
+   - Coins cannot be transferred between users
+   - Ledger is append-only — never UPDATE a coin row, only INSERT
+
+   /account/coins page shows:
+   - Current balance + lifetime earned + current streak
+   - Coin pack purchase tiles (₹49 / ₹149 / ₹499 / ₹999 / ₹2,499 tiers)
+   - Free coin routes listed first: daily grant, rewarded video, missions
+   - Transaction history (purchases and grants only)
+   - Link to /account/play-limits
+
+10. RESPONSIBLE PLAY (/responsible-play)
+    Real functionality, not boilerplate:
+    - Session-time reminder toggle + duration selector
+    - Daily play-time cap (1h / 2h / 4h / no limit)
+    - Monthly coin-purchase cap (₹500 / ₹1,000 / ₹2,000 / no limit)
+    - Self-exclusion: 7 days / 30 days / 90 days / permanent
+    - Links to iCall and Vandrevala Foundation helplines
+    Linked from footer on every page and from the coins screen.
+
+11. AUTH FLOW
+    - Phone number input → OTP via MSG91
+    - Age declaration checkbox at registration: "I confirm I am 18 or older"
+    - Google OAuth as secondary option
+    - On first login: welcome modal, 10,000 coin grant, onboarding tips
+
+12. COMPONENTS TO BUILD (with all states)
+
+    LiveMatchCard: Live (pulsing red dot + "LIVE" label) | Upcoming (countdown) | 
+                   Completed (result) | Abandoned
+    GameTile: Default | Hover | Locked | New badge | Playing-now count
+    CoinChip: Default | Increment animation | Low-balance warning
+    ScoreHeader: First innings | Second innings (with RRR) | Break | Result
+    OverStrip: Per-ball tokens (dot/1/2/3/4/5/6/W/WD/NB/LB/B) with colours
+    LeaderboardRow: Default | Own-rank highlight | Top-3 medal | Rank movement arrow
+    ContestCard: Open | Locked | Live scoring | Settled
+    Buttons: Primary | Secondary | Ghost | Destructive — each with loading + disabled
+    
+    Empty/error states (must be designed, not left to runtime):
+    - No live matches
+    - Feed unavailable  
+    - No active contests
+    - Offline / connection lost
+
+13. SEO REQUIREMENTS
+    - next-sitemap for XML sitemap, auto-regenerating, submitted to Search Console
+    - Self-referencing canonicals on every page
+    - noindex on all /account/* and gameplay routes
+    - Server-rendered content on every indexed page — 
+      verify by curl, not browser
+    - Schema markup:
+      SportsEvent on match pages
+      Person on player pages  
+      VideoGame on game description pages
+      Organization sitewide
+      BreadcrumbList everywhere
+    - Open Graph tags on all content pages
+    - Keywords to NEVER appear in URLs, metadata, alt text, or copy:
+      bet, betting, odds, stake, wager, cashout, payout, bookmaker, 
+      punter, satta, wagering, "prediction tips", "best betting site"
+
+14. PERFORMANCE BUDGET (enforce in build)
+    - LCP under 2.0s on 4G
+    - INP under 200ms
+    - CLS under 0.1 — reserve fixed height for score strip and all ad slots
+    - Initial JS bundle under 200KB gzipped on content routes
+    - Game bundles lazy-loaded on demand only
+    - Content pages fully readable with JavaScript disabled
+
+15. ACCESSIBILITY
+    - Minimum 4.5:1 contrast on all text
+    - Never encode meaning in colour alone (LIVE label + red dot, not just red dot)
+    - Full keyboard navigation + visible focus rings
+    - prefers-reduced-motion respected everywhere
+    - aria-live="polite" on score updates
+
+---
+
+START WITH:
+1. Project scaffold with design system and Tailwind config
+2. Database schema (Prisma)
+3. Homepage with mock live score data
+4. Match centre shell with tab navigation
+5. Games lobby with mock game cards
+6. Auth flow (phone OTP structure, can mock OTP for now)
+7. Coin ledger system
+8. /account/coins page
+9. /responsible-play page
+10. All legal pages (terms, privacy, refund, no-real-money-policy, 
+    virtual-currency-policy)
+
+Build mobile-first. Every page must work perfectly at 390px before 1440px.
+
+The gold colour (#E8B44A) is ONLY for coins and rewards — never use it for CTAs.
+The green (#0FA968) is ONLY for primary actions and positive states.
+The red (#E5342F) is ONLY for LIVE indicators and destructive actions.
